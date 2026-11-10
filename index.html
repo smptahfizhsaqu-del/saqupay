@@ -153,6 +153,7 @@ function sesiHabis(r) {
 }
 function keluarLokal(pesan) {
   token = null; sesi = null; kartuAktif = null;
+  hapusSesi();
   tutupKamera();
   clearTimeout(timerReset);
   lihat('kasir', false); lihat('bendahara', false); lihat('bar', false); lihat('login', true);
@@ -173,6 +174,7 @@ async function masukKlik() {
     $('pass').value = '';
     if (!r.ok) { tampil('pesanLogin', r.pesan, 'err'); return; }
     token = r.token; sesi = r;
+    simpanSesi();
     sembunyi('pesanLogin');
     tampilkanHalaman();
   } catch (e) {
@@ -421,7 +423,30 @@ async function pCairkan() {
     $('btnCair').disabled = false;
   }
 }
-
+// ----- SIMPAN SESI (agar tidak keluar saat halaman dimuat ulang) -----
+function simpanSesi() {
+  try {
+    sessionStorage.setItem('saqupay_sesi', JSON.stringify({ token: token, sesi: sesi }));
+  } catch (e) {}
+}
+function hapusSesi() {
+  try { sessionStorage.removeItem('saqupay_sesi'); } catch (e) {}
+}
+function pulihkanSesi() {
+  try {
+    const j = sessionStorage.getItem('saqupay_sesi');
+    if (!j) return false;
+    const d = JSON.parse(j);
+    if (!d || !d.token || !d.sesi) return false;
+    token = d.token;
+    sesi = d.sesi;
+    tampilkanHalaman();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+  
 // ----- Tombol Enter (scanner USB otomatis menekan Enter) -----
 function enter(id, fn) {
   $(id).addEventListener('keydown', function (e) {
@@ -436,7 +461,9 @@ enter('pin', bayarKlik);
 enter('bId', bCek);
 enter('bNominal', function () { $('bCatatan').focus(); });
 enter('bCatatan', bSimpan);
-window.onload = function () { $('user').focus(); };
+window.onload = function () {
+  if (!pulihkanSesi()) $('user').focus();
+};
 </script>
 </body>
 </html>
