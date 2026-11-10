@@ -1,1 +1,442 @@
-   const API_URL = 'https://script.google.com/macros/s/AKfycbxg60hlqOu_xPAydyV_AgHthFNJl5YcGDYGfr2cBzwGPml9xG7tIYB2N26r6u5g0Q2cNQ/exec';
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAQU PAY</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f3f6f4; margin: 0; color: #1d2b24; }
+  .wrap { max-width: 420px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; text-align: center; color: #1b5e3f; }
+  .kartu { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px;
+           box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  label { display: block; font-size: 13px; margin: 10px 0 4px; color: #4a5a52; }
+  input, select { width: 100%; box-sizing: border-box; padding: 12px; font-size: 18px;
+          border: 1px solid #b8c5bd; border-radius: 8px; background: #fff; }
+  button { width: 100%; padding: 14px; font-size: 17px; border: 0; border-radius: 8px;
+           background: #1b5e3f; color: #fff; margin-top: 12px; cursor: pointer; }
+  button.abu { background: #7b8a82; }
+  button:disabled { opacity: .5; }
+  .pesan { padding: 10px; border-radius: 8px; margin-top: 10px; display: none; }
+  .ok { background: #dff3e6; color: #145a32; }
+  .err { background: #fde3e1; color: #8b1a10; }
+  .besar { font-size: 22px; font-weight: bold; margin-bottom: 6px; }
+  .hide { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SAQU PAY</h1>
+
+  <!-- LOGIN -->
+  <div id="login" class="kartu">
+    <label>Username</label>
+    <input id="user" autocomplete="off" autocapitalize="none" autocorrect="off">
+    <label>Password</label>
+    <input id="pass" type="password" autocomplete="off">
+    <button id="btnMasuk" onclick="masukKlik()">Masuk</button>
+    <div id="pesanLogin" class="pesan"></div>
+  </div>
+
+  <!-- BAR ATAS -->
+  <div id="bar" class="kartu hide">
+    <div id="info"></div>
+    <button class="abu" onclick="keluarKlik()">Keluar</button>
+  </div>
+
+  <!-- KAMERA -->
+  <div id="kamera" class="kartu hide">
+    <div id="reader" style="width:100%"></div>
+    <div id="pesanKamera" class="pesan"></div>
+    <button class="abu" onclick="tutupKamera()">Tutup kamera</button>
+  </div>
+
+  <!-- KASIR -->
+  <div id="kasir" class="hide">
+    <div id="k1" class="kartu">
+      <label>Harga (Rp)</label>
+      <input id="nominal" inputmode="numeric" autocomplete="off">
+      <label>Kartu santri</label>
+      <input id="idKartu" autocomplete="off" autocapitalize="characters" placeholder="Scan atau ketik kode kartu">
+      <button class="abu" onclick="bukaKamera('idKartu', cekKartu)">📷 Scan dengan kamera</button>
+      <button onclick="cekKartu()">Lanjut</button>
+    </div>
+    <div id="k2" class="kartu hide">
+      <div class="besar" id="kNama"></div>
+      <div id="kTotal"></div>
+      <label>Masukkan PIN</label>
+      <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+      <button id="btnBayar" onclick="bayarKlik()">Bayar</button>
+      <button class="abu" onclick="kasirReset()">Batal</button>
+    </div>
+    <div id="k3" class="kartu hide">
+      <div class="besar" id="kHasil"></div>
+      <div id="kDetail"></div>
+      <button onclick="kasirReset()">Transaksi baru</button>
+    </div>
+    <div id="pesanKasir" class="pesan"></div>
+    <div class="kartu">
+      <div id="rkTeks">Memuat ringkasan...</div>
+    </div>
+  </div>
+
+  <!-- BENDAHARA -->
+  <div id="bendahara" class="hide">
+    <div id="b1" class="kartu">
+      <label>Kartu santri</label>
+      <input id="bId" autocomplete="off" autocapitalize="characters" placeholder="Scan atau ketik kode kartu">
+      <button class="abu" onclick="bukaKamera('bId', bCek)">📷 Scan dengan kamera</button>
+      <button onclick="bCek()">Cari</button>
+    </div>
+    <div id="b2" class="kartu hide">
+      <div class="besar" id="bNama"></div>
+      <div id="bSaldo"></div>
+      <label>Nominal top-up (Rp)</label>
+      <input id="bNominal" inputmode="numeric" autocomplete="off">
+      <label>Catatan (misal: tunai atau transfer BCA)</label>
+      <input id="bCatatan" autocomplete="off" maxlength="100">
+      <button id="btnTopup" onclick="bSimpan()">Simpan top-up</button>
+      <button class="abu" onclick="bendaharaReset()">Batal</button>
+    </div>
+    <div id="pesanBend" class="pesan"></div>
+
+    <div class="kartu">
+      <div class="besar">Pencairan dana penjual</div>
+      <label>Pilih penjual</label>
+      <select id="pPenjual" onchange="pPilih()"></select>
+      <div id="pInfo" style="margin-top:8px"></div>
+      <label>Nominal yang dicairkan (Rp)</label>
+      <input id="pNominal" inputmode="numeric" autocomplete="off">
+      <label>Catatan (misal: transfer BRI atau tunai)</label>
+      <input id="pCatatan" autocomplete="off" maxlength="100">
+      <button id="btnCair" onclick="pCairkan()">Cairkan</button>
+      <div id="pesanCair" class="pesan"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbxg60hlqOu_xPAydyV_AgHthFNJl5YcGDYGfr2cBzwGPml9xG7tIYB2N26r6u5g0Q2cNQ/exec';
+
+let token = null, sesi = null, kartuAktif = null, timerReset = null, pemindai = null;
+let daftarPenjual = [];
+
+function $(id) { return document.getElementById(id); }
+function rupiah(n) { return 'Rp' + Number(n).toLocaleString('id-ID'); }
+function angka(teks) { return parseInt(String(teks).replace(/\D/g, ''), 10) || 0; }
+function lihat(id, ya) { $(id).classList.toggle('hide', !ya); }
+function sembunyi(id) { $(id).style.display = 'none'; }
+function tampil(id, teks, jenis) {
+  const e = $(id);
+  e.textContent = teks;
+  e.className = 'pesan ' + jenis;
+  e.style.display = 'block';
+}
+
+// Memanggil server (Apps Script)
+async function panggil(fn, ...args) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ fn: fn, args: args })
+  });
+  return await res.json();
+}
+
+function sesiHabis(r) {
+  if (r && !r.ok && r.pesan && r.pesan.indexOf('Sesi berakhir') === 0) {
+    keluarLokal('Sesi berakhir, silakan masuk lagi');
+    return true;
+  }
+  return false;
+}
+function keluarLokal(pesan) {
+  token = null; sesi = null; kartuAktif = null;
+  tutupKamera();
+  clearTimeout(timerReset);
+  lihat('kasir', false); lihat('bendahara', false); lihat('bar', false); lihat('login', true);
+  if (pesan) tampil('pesanLogin', pesan, 'err'); else sembunyi('pesanLogin');
+  $('user').focus();
+}
+async function keluarKlik() {
+  const t = token;
+  keluarLokal('');
+  try { await panggil('keluar', t); } catch (e) {}
+}
+
+// ----- LOGIN -----
+async function masukKlik() {
+  $('btnMasuk').disabled = true;
+  try {
+    const r = await panggil('masuk', $('user').value, $('pass').value);
+    $('pass').value = '';
+    if (!r.ok) { tampil('pesanLogin', r.pesan, 'err'); return; }
+    token = r.token; sesi = r;
+    sembunyi('pesanLogin');
+    tampilkanHalaman();
+  } catch (e) {
+    tampil('pesanLogin', 'Gagal terhubung ke server (' + e.message + ')', 'err');
+  } finally {
+    $('btnMasuk').disabled = false;
+  }
+}
+function tampilkanHalaman() {
+  if (sesi.peran !== 'kasir' && sesi.peran !== 'bendahara') {
+    const p = sesi.peran, t = token;
+    keluarLokal('Peran ' + p + ' belum memiliki halaman');
+    panggil('keluar', t).catch(function () {});
+    return;
+  }
+  lihat('login', false); lihat('bar', true);
+  $('info').textContent = sesi.username + ' (' + sesi.peran +
+    (sesi.id_penjual ? ' - ' + sesi.id_penjual : '') + ')';
+  lihat('kasir', sesi.peran === 'kasir');
+  lihat('bendahara', sesi.peran === 'bendahara');
+  sembunyi('pesanBend'); sembunyi('pesanCair');
+  if (sesi.peran === 'kasir') { kasirReset(); muatRingkasKasir(); }
+  else { bendaharaReset(); muatPenjual(); }
+}
+
+// ----- KAMERA (langsung scan) -----
+async function bukaKamera(idInput, sesudah) {
+  await tutupKamera();
+  lihat('kamera', true);
+  sembunyi('pesanKamera');
+  $('kamera').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (typeof Html5Qrcode === 'undefined') {
+    tampil('pesanKamera', 'Pembaca kamera gagal dimuat. Periksa koneksi internet lalu muat ulang halaman.', 'err');
+    return;
+  }
+  pemindai = new Html5Qrcode('reader', {
+    formatsToSupport: [Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.CODE_128],
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  });
+  let sudahTerbaca = false;
+  try {
+    await pemindai.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: function (w, h) { return { width: Math.floor(w * 0.9), height: 130 }; } },
+      function (teks) {
+        if (sudahTerbaca) return;
+        sudahTerbaca = true;
+        if (navigator.vibrate) navigator.vibrate(100);
+        $(idInput).value = String(teks).trim().toUpperCase();
+        tutupKamera().then(sesudah);
+      },
+      function () {}
+    );
+  } catch (e) {
+    tampil('pesanKamera', 'Kamera tidak dapat dibuka (' + String(e) +
+      '). Izinkan kamera untuk situs ini di pengaturan browser, atau ketik kode kartu manual.', 'err');
+  }
+}
+async function tutupKamera() {
+  if (pemindai) {
+    try { await pemindai.stop(); } catch (e) {}
+    try { pemindai.clear(); } catch (e) {}
+    pemindai = null;
+  }
+  lihat('kamera', false);
+}
+
+// ----- KASIR -----
+function kasirReset() {
+  clearTimeout(timerReset);
+  kartuAktif = null;
+  $('nominal').value = ''; $('idKartu').value = ''; $('pin').value = '';
+  lihat('k1', true); lihat('k2', false); lihat('k3', false);
+  sembunyi('pesanKasir');
+  $('nominal').focus();
+}
+function kembaliKeK1(pesan) {
+  kartuAktif = null;
+  $('idKartu').value = ''; $('pin').value = '';
+  lihat('k1', true); lihat('k2', false); lihat('k3', false);
+  tampil('pesanKasir', pesan, 'err');
+  $('idKartu').focus();
+}
+async function cekKartu() {
+  const nominal = angka($('nominal').value);
+  const id = $('idKartu').value.trim();
+  if (nominal <= 0) { tampil('pesanKasir', 'Isi harga dulu', 'err'); $('nominal').focus(); return; }
+  if (!id) { tampil('pesanKasir', 'Scan kartu dulu', 'err'); $('idKartu').focus(); return; }
+  try {
+    const r = await panggil('apiCekSantri', token, id);
+    if (sesiHabis(r)) return;
+    if (!r.ok) { kembaliKeK1(r.pesan); return; }
+    kartuAktif = { id: r.id_kartu, nominal: nominal };
+    sembunyi('pesanKasir');
+    $('kNama').textContent = r.nama + ' (kelas ' + r.kelas + ')';
+    $('kTotal').textContent = 'Total bayar: ' + rupiah(nominal);
+    lihat('k1', false); lihat('k2', true);
+    $('pin').focus();
+  } catch (e) {
+    tampil('pesanKasir', 'Koneksi bermasalah, coba lagi', 'err');
+  }
+}
+async function bayarKlik() {
+  if (!kartuAktif) return;
+  const pin = $('pin').value;
+  if (!/^\d{4,6}$/.test(pin)) {
+    tampil('pesanKasir', 'PIN harus 4 sampai 6 angka', 'err');
+    $('pin').focus();
+    return;
+  }
+  $('btnBayar').disabled = true;
+  try {
+    const r = await panggil('apiBayar', token, kartuAktif.id, pin, kartuAktif.nominal);
+    $('pin').value = '';
+    if (sesiHabis(r)) return;
+    if (r.ok) {
+      lihat('k2', false); lihat('k3', true);
+      sembunyi('pesanKasir');
+      $('kHasil').textContent = '✔ Pembayaran berhasil';
+      $('kDetail').textContent = r.nama + ' | Dibayar ' + rupiah(r.nominal) +
+        ' | Sisa saldo ' + rupiah(r.saldo_sesudah);
+      timerReset = setTimeout(kasirReset, 10000);
+      muatRingkasKasir();
+    } else if (r.pesan.indexOf('PIN salah') === 0 && r.pesan.indexOf('dikunci') === -1) {
+      tampil('pesanKasir', r.pesan, 'err');
+      $('pin').focus();
+    } else {
+      kembaliKeK1(r.pesan);
+    }
+  } catch (e) {
+    tampil('pesanKasir', 'Koneksi bermasalah. Cek dulu riwayat transaksi sebelum mengulang.', 'err');
+  } finally {
+    $('btnBayar').disabled = false;
+  }
+}
+async function muatRingkasKasir() {
+  try {
+    const r = await panggil('apiRingkasanKasir', token);
+    if (sesiHabis(r)) return;
+    if (!r.ok) { $('rkTeks').textContent = r.pesan; return; }
+    $('rkTeks').textContent = 'Hari ini: ' + r.jumlah_hari_ini + ' transaksi, ' +
+      rupiah(r.hari_ini) + ' | Belum dicairkan: ' + rupiah(r.belum_cair);
+  } catch (e) {
+    $('rkTeks').textContent = 'Ringkasan tidak tersedia';
+  }
+}
+
+// ----- BENDAHARA: TOP-UP -----
+function bendaharaReset() {
+  kartuAktif = null;
+  $('bId').value = ''; $('bNominal').value = ''; $('bCatatan').value = '';
+  lihat('b1', true); lihat('b2', false);
+  $('bId').focus();
+}
+async function bCek() {
+  const id = $('bId').value.trim();
+  if (!id) return;
+  try {
+    const r = await panggil('apiCekSantri', token, id);
+    if (sesiHabis(r)) return;
+    if (!r.ok) {
+      tampil('pesanBend', r.pesan, 'err');
+      $('bId').value = ''; $('bId').focus();
+      return;
+    }
+    kartuAktif = { id: r.id_kartu };
+    sembunyi('pesanBend');
+    $('bNama').textContent = r.nama + ' (kelas ' + r.kelas + ')';
+    $('bSaldo').textContent = 'Saldo saat ini: ' + rupiah(r.saldo);
+    lihat('b1', false); lihat('b2', true);
+    $('bNominal').focus();
+  } catch (e) {
+    tampil('pesanBend', 'Koneksi bermasalah, coba lagi', 'err');
+  }
+}
+async function bSimpan() {
+  const nominal = angka($('bNominal').value);
+  if (!kartuAktif || nominal <= 0) { tampil('pesanBend', 'Isi nominal top-up', 'err'); return; }
+  $('btnTopup').disabled = true;
+  try {
+    const r = await panggil('apiTopup', token, kartuAktif.id, nominal, $('bCatatan').value);
+    if (sesiHabis(r)) return;
+    if (r.ok) {
+      bendaharaReset();
+      tampil('pesanBend', '✔ Top-up berhasil: ' + r.nama + ' +' + rupiah(r.nominal) +
+        ' | Saldo baru ' + rupiah(r.saldo_sesudah), 'ok');
+    } else {
+      tampil('pesanBend', r.pesan, 'err');
+    }
+  } catch (e) {
+    tampil('pesanBend', 'Koneksi bermasalah. Cek dulu riwayat transaksi sebelum mengulang.', 'err');
+  } finally {
+    $('btnTopup').disabled = false;
+  }
+}
+
+// ----- BENDAHARA: PENCAIRAN -----
+async function muatPenjual() {
+  try {
+    const r = await panggil('apiRingkasanPenjual', token);
+    if (sesiHabis(r)) return;
+    if (!r.ok) { tampil('pesanCair', r.pesan, 'err'); return; }
+    daftarPenjual = r.daftar;
+    const pilih = $('pPenjual');
+    const terpilih = pilih.value;
+    pilih.innerHTML = '';
+    daftarPenjual.forEach(function (p) {
+      const o = document.createElement('option');
+      o.value = p.id_penjual;
+      o.textContent = p.nama + ' (' + p.id_penjual + ')';
+      pilih.appendChild(o);
+    });
+    if (terpilih) pilih.value = terpilih;
+    pPilih();
+  } catch (e) {
+    tampil('pesanCair', 'Gagal memuat data penjual', 'err');
+  }
+}
+function pPilih() {
+  const p = daftarPenjual.filter(function (x) { return x.id_penjual === $('pPenjual').value; })[0];
+  if (!p) { $('pInfo').textContent = ''; return; }
+  $('pInfo').textContent = 'Total penjualan ' + rupiah(p.penjualan) +
+    ' | Sudah dicairkan ' + rupiah(p.pencairan) +
+    ' | Belum dicairkan ' + rupiah(p.belum_cair);
+  $('pNominal').value = p.belum_cair > 0 ? p.belum_cair : '';
+}
+async function pCairkan() {
+  const id = $('pPenjual').value;
+  const nominal = angka($('pNominal').value);
+  if (!id || nominal <= 0) { tampil('pesanCair', 'Pilih penjual dan isi nominal', 'err'); return; }
+  $('btnCair').disabled = true;
+  try {
+    const r = await panggil('apiPencairan', token, id, nominal, $('pCatatan').value);
+    if (sesiHabis(r)) return;
+    if (r.ok) {
+      $('pCatatan').value = '';
+      await muatPenjual();
+      tampil('pesanCair', '✔ Pencairan ' + rupiah(r.nominal) + ' untuk ' + r.nama +
+        ' tercatat. Sisa belum dicairkan ' + rupiah(r.sisa_belum_cair), 'ok');
+    } else {
+      tampil('pesanCair', r.pesan, 'err');
+    }
+  } catch (e) {
+    tampil('pesanCair', 'Koneksi bermasalah. Cek dulu riwayat transaksi sebelum mengulang.', 'err');
+  } finally {
+    $('btnCair').disabled = false;
+  }
+}
+
+// ----- Tombol Enter (scanner USB otomatis menekan Enter) -----
+function enter(id, fn) {
+  $(id).addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); fn(); }
+  });
+}
+enter('user', function () { $('pass').focus(); });
+enter('pass', masukKlik);
+enter('nominal', function () { $('idKartu').focus(); });
+enter('idKartu', cekKartu);
+enter('pin', bayarKlik);
+enter('bId', bCek);
+enter('bNominal', function () { $('bCatatan').focus(); });
+enter('bCatatan', bSimpan);
+window.onload = function () { $('user').focus(); };
+</script>
+</body>
+</html>
