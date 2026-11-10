@@ -97,6 +97,8 @@
       <input id="bCatatan" autocomplete="off" maxlength="100">
       <button id="btnTopup" onclick="bSimpan()">Simpan top-up</button>
       <button class="abu" onclick="bendaharaReset()">Batal</button>
+      <button class="abu" onclick="bRiwayat()">Lihat riwayat transaksi</button>
+      <div id="daftarRiwayat" style="margin-top:10px;overflow-x:auto"></div>
     </div>
     <div id="pesanBend" class="pesan"></div>
 
@@ -327,6 +329,7 @@ function bendaharaReset() {
   kartuAktif = null;
   $('bId').value = ''; $('bNominal').value = ''; $('bCatatan').value = '';
   lihat('b1', true); lihat('b2', false);
+  $('daftarRiwayat').textContent = '';
   $('bId').focus();
 }
 async function bCek() {
@@ -446,6 +449,48 @@ function pulihkanSesi() {
     return false;
   }
 }
+
+// ----- RIWAYAT TRANSAKSI SANTRI (bendahara) -----
+async function bRiwayat() {
+  if (!kartuAktif) return;
+  const kotak = $('daftarRiwayat');
+  kotak.textContent = 'Memuat riwayat...';
+  try {
+    const r = await panggil('apiRiwayatSantri', token, kartuAktif.id);
+    if (sesiHabis(r)) return;
+    if (!r.ok) { kotak.textContent = r.pesan; return; }
+    if (r.riwayat.length === 0) { kotak.textContent = 'Belum ada transaksi.'; return; }
+    const tabel = document.createElement('table');
+    tabel.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px';
+    const kepala = tabel.insertRow();
+    ['Waktu', 'Jenis', 'Penjual', 'Nominal', 'Saldo'].forEach(function (t) {
+      const th = document.createElement('th');
+      th.textContent = t;
+      th.style.cssText = 'text-align:left;border-bottom:2px solid #b8c5bd;padding:4px';
+      kepala.appendChild(th);
+    });
+    r.riwayat.forEach(function (x) {
+      const baris = tabel.insertRow();
+      const tanda = x.jenis === 'topup' ? '+' : (x.jenis === 'bayar' ? '-' : '');
+      const isi = [
+        x.waktu,
+        x.jenis + (x.catatan ? ' (' + x.catatan + ')' : ''),
+        x.penjual,
+        tanda + rupiah(x.nominal),
+        rupiah(x.saldo_sesudah)
+      ];
+      isi.forEach(function (t) {
+        const td = baris.insertCell();
+        td.textContent = t;
+        td.style.cssText = 'border-bottom:1px solid #e2e8e4;padding:4px';
+      });
+    });
+    kotak.innerHTML = '';
+    kotak.appendChild(tabel);
+  } catch (e) {
+    kotak.textContent = 'Koneksi bermasalah, coba lagi';
+  }
+}  
   
 // ----- Tombol Enter (scanner USB otomatis menekan Enter) -----
 function enter(id, fn) {
