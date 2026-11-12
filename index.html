@@ -213,14 +213,14 @@ async function bukaKamera(idInput, sesudah) {
     return;
   }
   pemindai = new Html5Qrcode('reader', {
-    formatsToSupport: [Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.CODE_128],
+       formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.CODE_128],
     experimentalFeatures: { useBarCodeDetectorIfSupported: true }
   });
   let sudahTerbaca = false;
   try {
     await pemindai.start(
       { facingMode: 'environment' },
-      { fps: 10, qrbox: function (w, h) { return { width: Math.floor(w * 0.9), height: 130 }; } },
+         { fps: 10, qrbox: function (w, h) { const s = Math.floor(Math.min(w, h) * 0.8); return { width: s, height: s }; } },
       function (teks) {
         if (sudahTerbaca) return;
         sudahTerbaca = true;
