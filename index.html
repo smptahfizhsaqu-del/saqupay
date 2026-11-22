@@ -65,7 +65,7 @@
       <div class="besar" id="kNama"></div>
       <div id="kTotal"></div>
       <label>Masukkan PIN</label>
-      <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+      <input id="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
       <button id="btnBayar" onclick="bayarKlik()">Bayar</button>
       <button class="abu" onclick="kasirReset()">Batal</button>
     </div>
@@ -282,8 +282,8 @@ async function cekKartu() {
 async function bayarKlik() {
   if (!kartuAktif) return;
   const pin = $('pin').value;
-  if (!/^\d{4,6}$/.test(pin)) {
-    tampil('pesanKasir', 'PIN harus 4 sampai 6 angka', 'err');
+  if (!/^\d{6,8}$/.test(pin)) {
+    tampil('pesanKasir', 'PIN harus 6 sampai 8 angka', 'err');
     $('pin').focus();
     return;
   }
