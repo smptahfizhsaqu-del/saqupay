@@ -54,6 +54,11 @@
   <!-- KASIR -->
   <div id="kasir" class="hide">
     <div id="k1" class="kartu">
+      <div id="pilihCepat" class="hide">
+        <label>Pilih cepat (ketuk untuk menambah)</label>
+        <div id="daftarBarang" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        <button class="abu" onclick="kosongkanPilihan()" style="margin-top:8px">Kosongkan pilihan</button>
+      </div>
       <label>Nama barang yang dibeli</label>
       <input id="namaBarang" autocomplete="off" maxlength="100" placeholder="Contoh: nasi goreng, es teh">
       <label>Harga (Rp)</label>
@@ -221,7 +226,7 @@ function tampilkanHalaman() {
   lihat('kasir', sesi.peran === 'kasir');
   lihat('bendahara', sesi.peran === 'bendahara');
   sembunyi('pesanBend'); sembunyi('pesanCair');
-  if (sesi.peran === 'kasir') { kasirReset(); muatRingkasKasir(); muatAjuan(); }
+  if (sesi.peran === 'kasir') { kasirReset(); muatRingkasKasir(); muatAjuan(); muatBarang(); }
   else { bendaharaReset(); muatPenjual(); muatPengajuan(); }
 }
 
@@ -652,6 +657,36 @@ async function prosesAjuan(idPengajuan, aksi, tombol) {
     tampil('pesanPengajuan', 'Koneksi bermasalah. Cek status pengajuan sebelum mengulang.', 'err');
     tombol.disabled = false;
   }
+}
+
+// ----- BARANG CEPAT PILIH -----
+async function muatBarang() {
+  try {
+    const r = await panggil('apiDaftarBarang', token);
+    if (sesiHabis(r)) return;
+    const kotak = $('daftarBarang');
+    kotak.innerHTML = '';
+    if (!r.ok || r.daftar.length === 0) { lihat('pilihCepat', false); return; }
+    r.daftar.forEach(function (x) {
+      const b = document.createElement('button');
+      b.textContent = x.nama + ' (' + rupiah(x.harga) + ')';
+      b.style.cssText = 'flex:1 1 45%;width:auto;margin:0;padding:10px;font-size:15px;';
+      b.onclick = function () { pilihBarang(x.nama, x.harga); };
+      kotak.appendChild(b);
+    });
+    lihat('pilihCepat', true);
+  } catch (e) {}
+}
+
+function pilihBarang(nama, harga) {
+  const sekarang = $('namaBarang').value.trim();
+  $('namaBarang').value = sekarang ? sekarang + ', ' + nama : nama;
+  $('nominal').value = angka($('nominal').value) + harga;
+}
+
+function kosongkanPilihan() {
+  $('namaBarang').value = '';
+  $('nominal').value = '';
 }
   
 // ----- Tombol Enter (scanner USB otomatis menekan Enter) -----
