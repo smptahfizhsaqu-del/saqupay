@@ -54,6 +54,8 @@
   <!-- KASIR -->
   <div id="kasir" class="hide">
     <div id="k1" class="kartu">
+      <label>Nama barang yang dibeli</label>
+      <input id="namaBarang" autocomplete="off" maxlength="100" placeholder="Contoh: nasi goreng, es teh">
       <label>Harga (Rp)</label>
       <input id="nominal" inputmode="numeric" autocomplete="off">
       <label>Kartu santri</label>
@@ -269,10 +271,10 @@ async function tutupKamera() {
 function kasirReset() {
   clearTimeout(timerReset);
   kartuAktif = null;
-  $('nominal').value = ''; $('idKartu').value = ''; $('pin').value = '';
+  $('namaBarang').value = ''; $('nominal').value = ''; $('idKartu').value = ''; $('pin').value = '';
   lihat('k1', true); lihat('k2', false); lihat('k3', false);
   sembunyi('pesanKasir');
-  $('nominal').focus();
+  $('namaBarang').focus();
 }
 function kembaliKeK1(pesan) {
   kartuAktif = null;
@@ -282,18 +284,20 @@ function kembaliKeK1(pesan) {
   $('idKartu').focus();
 }
 async function cekKartu() {
+  const barang = $('namaBarang').value.trim();
   const nominal = angka($('nominal').value);
   const id = $('idKartu').value.trim();
+  if (!barang) { tampil('pesanKasir', 'Isi nama barang dulu', 'err'); $('namaBarang').focus(); return; }
   if (nominal <= 0) { tampil('pesanKasir', 'Isi harga dulu', 'err'); $('nominal').focus(); return; }
   if (!id) { tampil('pesanKasir', 'Scan kartu dulu', 'err'); $('idKartu').focus(); return; }
   try {
     const r = await panggil('apiCekSantri', token, id);
     if (sesiHabis(r)) return;
     if (!r.ok) { kembaliKeK1(r.pesan); return; }
-    kartuAktif = { id: r.id_kartu, nominal: nominal };
+    kartuAktif = { id: r.id_kartu, nominal: nominal, barang: barang };
     sembunyi('pesanKasir');
     $('kNama').textContent = r.nama + ' (kelas ' + r.kelas + ')';
-    $('kTotal').textContent = 'Total bayar: ' + rupiah(nominal);
+    $('kTotal').textContent = 'Beli: ' + barang + ' | Total bayar: ' + rupiah(nominal);
     lihat('k1', false); lihat('k2', true);
     $('pin').focus();
   } catch (e) {
@@ -310,7 +314,7 @@ async function bayarKlik() {
   }
   $('btnBayar').disabled = true;
   try {
-    const r = await panggil('apiBayar', token, kartuAktif.id, pin, kartuAktif.nominal);
+    const r = await panggil('apiBayar', token, kartuAktif.id, pin, kartuAktif.nominal, kartuAktif.barang);
     $('pin').value = '';
     if (sesiHabis(r)) return;
     if (r.ok) {
@@ -567,9 +571,9 @@ async function muatRiwayatPenjual() {
     tampilAjuan(r.pengajuan);
     if (r.transaksi.length === 0) { kotak.textContent = 'Belum ada transaksi.'; return; }
     kotak.innerHTML = '';
-    kotak.appendChild(tabelDari(['Waktu', 'Jenis', 'Santri', 'Nominal'],
+    kotak.appendChild(tabelDari(['Waktu', 'Jenis', 'Santri', 'Barang', 'Nominal'],
       r.transaksi.map(function (x) {
-        return [x.waktu, x.jenis === 'pencairan' ? 'pencairan diterima' : 'penjualan', x.santri, rupiah(x.nominal)];
+        return [x.waktu, x.jenis === 'pencairan' ? 'pencairan diterima' : 'penjualan', x.santri, x.barang, rupiah(x.nominal)];
       })));
   } catch (e) {
     kotak.textContent = 'Koneksi bermasalah, coba lagi';
@@ -658,6 +662,7 @@ function enter(id, fn) {
 }
 enter('user', function () { $('pass').focus(); });
 enter('pass', masukKlik);
+enter('namaBarang', function () { $('nominal').focus(); });
 enter('nominal', function () { $('idKartu').focus(); });
 enter('idKartu', cekKartu);
 enter('pin', bayarKlik);
