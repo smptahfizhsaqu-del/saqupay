@@ -76,6 +76,22 @@
     </div>
     <div id="pesanKasir" class="pesan"></div>
     <div class="kartu">
+      <div class="besar">Penjualan saya</div>
+      <button class="abu" onclick="muatRiwayatPenjual()">Lihat riwayat penjualan</button>
+      <div id="riwayatPenjual" style="margin-top:10px;overflow-x:auto"></div>
+    </div>
+    <div class="kartu">
+      <div class="besar">Ajukan pencairan dana</div>
+      <div id="infoAjukan">Memuat...</div>
+      <label>Nominal yang diajukan (Rp)</label>
+      <input id="ajNominal" inputmode="numeric" autocomplete="off">
+      <label>Catatan (misal: transfer ke BRI atau tunai)</label>
+      <input id="ajCatatan" autocomplete="off" maxlength="100">
+      <button id="btnAjukan" onclick="ajukanKlik()">Ajukan ke bendahara</button>
+      <div id="pesanAjukan" class="pesan"></div>
+      <div id="daftarAjuan" style="margin-top:10px;font-size:13px;overflow-x:auto"></div>
+    </div>
+    <div class="kartu">
       <div id="rkTeks">Memuat ringkasan...</div>
     </div>
   </div>
@@ -101,7 +117,12 @@
       <div id="daftarRiwayat" style="margin-top:10px;overflow-x:auto"></div>
     </div>
     <div id="pesanBend" class="pesan"></div>
-
+    <div class="kartu">
+      <div class="besar">Pengajuan pencairan</div>
+      <div id="daftarPengajuan">Memuat...</div>
+      <div id="pesanPengajuan" class="pesan"></div>
+    </div>
+    
     <div class="kartu">
       <div class="besar">Pencairan dana penjual</div>
       <label>Pilih penjual</label>
@@ -198,8 +219,8 @@ function tampilkanHalaman() {
   lihat('kasir', sesi.peran === 'kasir');
   lihat('bendahara', sesi.peran === 'bendahara');
   sembunyi('pesanBend'); sembunyi('pesanCair');
-  if (sesi.peran === 'kasir') { kasirReset(); muatRingkasKasir(); }
-  else { bendaharaReset(); muatPenjual(); }
+  if (sesi.peran === 'kasir') { kasirReset(); muatRingkasKasir(); muatAjuan(); }
+  else { bendaharaReset(); muatPenjual(); muatPengajuan(); }
 }
 
 // ----- KAMERA (langsung scan) -----
@@ -319,6 +340,8 @@ async function muatRingkasKasir() {
     if (!r.ok) { $('rkTeks').textContent = r.pesan; return; }
     $('rkTeks').textContent = 'Hari ini: ' + r.jumlah_hari_ini + ' transaksi, ' +
       rupiah(r.hari_ini) + ' | Belum dicairkan: ' + rupiah(r.belum_cair);
+    $('infoAjukan').textContent = 'Dana belum dicairkan: ' + rupiah(r.belum_cair);
+    if (!$('ajNominal').value && r.belum_cair > 0) $('ajNominal').value = r.belum_cair;
   } catch (e) {
     $('rkTeks').textContent = 'Ringkasan tidak tersedia';
   }
@@ -491,6 +514,141 @@ async function bRiwayat() {
     kotak.textContent = 'Koneksi bermasalah, coba lagi';
   }
 }  
+
+// ----- PENJUAL: RIWAYAT DAN PENGAJUAN PENCAIRAN -----
+function tabelDari(kepala, baris) {
+  const tabel = document.createElement('table');
+  tabel.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px';
+  const k = tabel.insertRow();
+  kepala.forEach(function (t) {
+    const th = document.createElement('th');
+    th.textContent = t;
+    th.style.cssText = 'text-align:left;border-bottom:2px solid #b8c5bd;padding:4px';
+    k.appendChild(th);
+  });
+  baris.forEach(function (isi) {
+    const b = tabel.insertRow();
+    isi.forEach(function (t) {
+      const td = b.insertCell();
+      td.textContent = t;
+      td.style.cssText = 'border-bottom:1px solid #e2e8e4;padding:4px';
+    });
+  });
+  return tabel;
+}
+
+function tampilAjuan(daftar) {
+  const kotak = $('daftarAjuan');
+  kotak.innerHTML = '';
+  if (!daftar || daftar.length === 0) return;
+  const judul = document.createElement('div');
+  judul.textContent = 'Pengajuan terakhir:';
+  judul.style.fontWeight = 'bold';
+  kotak.appendChild(judul);
+  kotak.appendChild(tabelDari(['Waktu', 'Nominal', 'Status'],
+    daftar.map(function (x) { return [x.waktu, rupiah(x.nominal), x.status]; })));
+}
+
+async function muatAjuan() {
+  try {
+    const r = await panggil('apiRiwayatPenjual', token);
+    if (sesiHabis(r)) return;
+    if (r.ok) tampilAjuan(r.pengajuan);
+  } catch (e) {}
+}
+
+async function muatRiwayatPenjual() {
+  const kotak = $('riwayatPenjual');
+  kotak.textContent = 'Memuat riwayat...';
+  try {
+    const r = await panggil('apiRiwayatPenjual', token);
+    if (sesiHabis(r)) return;
+    if (!r.ok) { kotak.textContent = r.pesan; return; }
+    tampilAjuan(r.pengajuan);
+    if (r.transaksi.length === 0) { kotak.textContent = 'Belum ada transaksi.'; return; }
+    kotak.innerHTML = '';
+    kotak.appendChild(tabelDari(['Waktu', 'Jenis', 'Santri', 'Nominal'],
+      r.transaksi.map(function (x) {
+        return [x.waktu, x.jenis === 'pencairan' ? 'pencairan diterima' : 'penjualan', x.santri, rupiah(x.nominal)];
+      })));
+  } catch (e) {
+    kotak.textContent = 'Koneksi bermasalah, coba lagi';
+  }
+}
+
+async function ajukanKlik() {
+  const nominal = angka($('ajNominal').value);
+  if (nominal <= 0) { tampil('pesanAjukan', 'Isi nominal yang diajukan', 'err'); return; }
+  $('btnAjukan').disabled = true;
+  try {
+    const r = await panggil('apiAjukanPencairan', token, nominal, $('ajCatatan').value);
+    if (sesiHabis(r)) return;
+    if (r.ok) {
+      $('ajCatatan').value = '';
+      tampil('pesanAjukan', '✔ Pengajuan ' + rupiah(r.nominal) + ' terkirim ke bendahara', 'ok');
+      muatAjuan();
+    } else {
+      tampil('pesanAjukan', r.pesan, 'err');
+    }
+  } catch (e) {
+    tampil('pesanAjukan', 'Koneksi bermasalah. Cek status pengajuan sebelum mengulang.', 'err');
+  } finally {
+    $('btnAjukan').disabled = false;
+  }
+}
+
+// ----- BENDAHARA: PENGAJUAN PENCAIRAN -----
+async function muatPengajuan() {
+  const kotak = $('daftarPengajuan');
+  try {
+    const r = await panggil('apiDaftarPengajuan', token);
+    if (sesiHabis(r)) return;
+    if (!r.ok) { kotak.textContent = r.pesan; return; }
+    kotak.innerHTML = '';
+    if (r.daftar.length === 0) { kotak.textContent = 'Tidak ada pengajuan yang menunggu.'; return; }
+    r.daftar.forEach(function (x) {
+      const item = document.createElement('div');
+      item.style.cssText = 'border:1px solid #d5ded9;border-radius:8px;padding:10px;margin-top:8px';
+      const info = document.createElement('div');
+      info.textContent = x.nama + ' meminta ' + rupiah(x.nominal) + ' (' + x.waktu + ')' +
+        (x.catatan ? ' | ' + x.catatan : '') + ' | Belum dicairkan: ' + rupiah(x.belum_cair);
+      item.appendChild(info);
+      const setuju = document.createElement('button');
+      setuju.textContent = 'Setujui dan cairkan';
+      setuju.onclick = function () { prosesAjuan(x.id_pengajuan, 'setuju', setuju); };
+      const tolak = document.createElement('button');
+      tolak.textContent = 'Tolak';
+      tolak.className = 'abu';
+      tolak.onclick = function () { prosesAjuan(x.id_pengajuan, 'tolak', tolak); };
+      item.appendChild(setuju);
+      item.appendChild(tolak);
+      kotak.appendChild(item);
+    });
+  } catch (e) {
+    kotak.textContent = 'Gagal memuat pengajuan';
+  }
+}
+
+async function prosesAjuan(idPengajuan, aksi, tombol) {
+  tombol.disabled = true;
+  try {
+    const r = await panggil('apiProsesPengajuan', token, idPengajuan, aksi);
+    if (sesiHabis(r)) return;
+    if (r.ok) {
+      tampil('pesanPengajuan', aksi === 'setuju'
+        ? '✔ Dicairkan ' + rupiah(r.nominal) + ' untuk ' + r.nama + '. Sisa belum dicairkan ' + rupiah(r.sisa_belum_cair)
+        : '✔ Pengajuan ditolak', 'ok');
+      await muatPengajuan();
+      muatPenjual();
+    } else {
+      tampil('pesanPengajuan', r.pesan, 'err');
+      tombol.disabled = false;
+    }
+  } catch (e) {
+    tampil('pesanPengajuan', 'Koneksi bermasalah. Cek status pengajuan sebelum mengulang.', 'err');
+    tombol.disabled = false;
+  }
+}
   
 // ----- Tombol Enter (scanner USB otomatis menekan Enter) -----
 function enter(id, fn) {
