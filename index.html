@@ -120,10 +120,24 @@
       <input id="bCatatan" autocomplete="off" maxlength="100">
       <button id="btnTopup" onclick="bSimpan()">Simpan top-up</button>
       <button class="abu" onclick="bendaharaReset()">Batal</button>
-      <button class="abu" onclick="bRiwayat()">Lihat riwayat transaksi</button>
-      <div id="daftarRiwayat" style="margin-top:10px;overflow-x:auto"></div>
     </div>
     <div id="pesanBend" class="pesan"></div>
+    <div class="kartu">
+      <div class="besar">Riwayat per kelas</div>
+      <label>Kelas</label>
+      <select id="rkKelas"></select>
+      <label>Periode</label>
+      <select id="rkPeriode">
+        <option value="hari_ini">Hari ini</option>
+        <option value="tujuh_hari">7 hari terakhir</option>
+        <option value="bulan_ini" selected>Bulan ini</option>
+        <option value="semua">Semua</option>
+      </select>
+      <button onclick="tampilKelas()">Tampilkan</button>
+      <div id="pesanKelas" class="pesan"></div>
+      <div id="ringkasKelas" style="margin-top:10px;overflow-x:auto"></div>
+      <div id="rincianKelas" style="margin-top:10px;overflow-x:auto"></div>
+    </div>
     <div class="kartu">
       <div class="besar">Pengajuan pencairan</div>
       <div id="daftarPengajuan">Memuat...</div>
@@ -227,7 +241,7 @@ function tampilkanHalaman() {
   lihat('bendahara', sesi.peran === 'bendahara');
   sembunyi('pesanBend'); sembunyi('pesanCair');
   if (sesi.peran === 'kasir') { kasirReset(); muatRingkasKasir(); muatAjuan(); muatBarang(); }
-  else { bendaharaReset(); muatPenjual(); muatPengajuan(); }
+  else { bendaharaReset(); muatPenjual(); muatPengajuan(); muatKelas(); }
 }
 
 // ----- KAMERA (langsung scan) -----
@@ -361,7 +375,6 @@ function bendaharaReset() {
   kartuAktif = null;
   $('bId').value = ''; $('bNominal').value = ''; $('bCatatan').value = '';
   lihat('b1', true); lihat('b2', false);
-  $('daftarRiwayat').textContent = '';
   $('bId').focus();
 }
 async function bCek() {
@@ -687,6 +700,120 @@ function pilihBarang(nama, harga) {
 function kosongkanPilihan() {
   $('namaBarang').value = '';
   $('nominal').value = '';
+}
+
+// ----- RIWAYAT PER KELAS (bendahara) -----
+let kelasTerpilih = '', periodeTerpilih = 'bulan_ini';
+
+async function muatKelas() {
+  try {
+    const r = await panggil('apiDaftarKelas', token);
+    if (sesiHabis(r)) return;
+    const pilih = $('rkKelas');
+    pilih.innerHTML = '';
+    if (!r.ok || r.daftar.length === 0) {
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = '(belum ada data kelas)';
+      pilih.appendChild(o);
+      return;
+    }
+    r.daftar.forEach(function (k) {
+      const o = document.createElement('option');
+      o.value = k;
+      o.textContent = 'Kelas ' + k;
+      pilih.appendChild(o);
+    });
+  } catch (e) {}
+}
+
+async function tampilKelas() {
+  const kelas = $('rkKelas').value;
+  const periode = $('rkPeriode').value;
+  if (!kelas) { tampil('pesanKelas', 'Pilih kelas dulu', 'err'); return; }
+  sembunyi('pesanKelas');
+  $('rincianKelas').innerHTML = '';
+  const kotak = $('ringkasKelas');
+  kotak.textContent = 'Memuat ringkasan...';
+  try {
+    const r = await panggil('apiRingkasanKelas', token, kelas, periode);
+    if (sesiHabis(r)) return;
+    if (!r.ok) { kotak.textContent = ''; tampil('pesanKelas', r.pesan, 'err'); return; }
+    kelasTerpilih = kelas;
+    periodeTerpilih = periode;
+    if (r.daftar.length === 0) { kotak.textContent = 'Tidak ada santri di kelas ini.'; return; }
+    kotak.innerHTML = '';
+    let tTopup = 0, tBelanja = 0, tSaldo = 0, tJumlah = 0;
+    const tabel = document.createElement('table');
+    tabel.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px';
+    const kepala = tabel.insertRow();
+    ['Nama', 'Top-up', 'Belanja', 'Saldo', 'Trx', ''].forEach(function (t) {
+      const th = document.createElement('th');
+      th.textContent = t;
+      th.style.cssText = 'text-align:left;border-bottom:2px solid #b8c5bd;padding:4px';
+      kepala.appendChild(th);
+    });
+    r.daftar.forEach(function (s) {
+      tTopup += s.topup; tBelanja += s.belanja; tSaldo += s.saldo; tJumlah += s.jumlah;
+      const b = tabel.insertRow();
+      [s.nama, rupiah(s.topup), rupiah(s.belanja), rupiah(s.saldo), String(s.jumlah)].forEach(function (t) {
+        const td = b.insertCell();
+        td.textContent = t;
+        td.style.cssText = 'border-bottom:1px solid #e2e8e4;padding:4px';
+      });
+      const tdAksi = b.insertCell();
+      tdAksi.style.cssText = 'border-bottom:1px solid #e2e8e4;padding:4px';
+      const tombol = document.createElement('button');
+      tombol.textContent = 'Rincian';
+      tombol.style.cssText = 'width:auto;margin:0;padding:6px 10px;font-size:13px';
+      tombol.onclick = function () { bukaRincian(s.id_kartu, s.nama); };
+      tdAksi.appendChild(tombol);
+    });
+    const total = tabel.insertRow();
+    ['Total kelas', rupiah(tTopup), rupiah(tBelanja), rupiah(tSaldo), String(tJumlah), ''].forEach(function (t) {
+      const td = total.insertCell();
+      td.textContent = t;
+      td.style.cssText = 'font-weight:bold;padding:4px';
+    });
+    kotak.appendChild(tabel);
+    const semua = document.createElement('button');
+    semua.className = 'abu';
+    semua.textContent = 'Rincian seluruh kelas';
+    semua.onclick = function () { bukaRincian('', ''); };
+    kotak.appendChild(semua);
+  } catch (e) {
+    kotak.textContent = '';
+    tampil('pesanKelas', 'Koneksi bermasalah, coba lagi', 'err');
+  }
+}
+
+async function bukaRincian(idKartu, nama) {
+  const kotak = $('rincianKelas');
+  kotak.textContent = 'Memuat rincian...';
+  try {
+    const r = await panggil('apiRincianKelas', token, kelasTerpilih, periodeTerpilih, idKartu);
+    if (sesiHabis(r)) return;
+    if (!r.ok) { kotak.textContent = r.pesan; return; }
+    kotak.innerHTML = '';
+    const judul = document.createElement('div');
+    judul.style.cssText = 'font-weight:bold;margin-bottom:6px';
+    judul.textContent = (nama ? 'Rincian ' + nama : 'Rincian seluruh kelas ' + kelasTerpilih) +
+      (r.terpotong ? ' (300 transaksi terbaru)' : '');
+    kotak.appendChild(judul);
+    if (r.daftar.length === 0) {
+      kotak.appendChild(document.createTextNode('Tidak ada transaksi pada periode ini.'));
+      return;
+    }
+    kotak.appendChild(tabelDari(['Waktu', 'Santri', 'Jenis', 'Penjual', 'Nominal', 'Saldo'],
+      r.daftar.map(function (x) {
+        const tanda = x.jenis === 'topup' ? '+' : '-';
+        return [x.waktu, x.nama, x.jenis + (x.catatan ? ' (' + x.catatan + ')' : ''),
+                x.penjual, tanda + rupiah(x.nominal), rupiah(x.saldo_sesudah)];
+      })));
+    kotak.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    kotak.textContent = 'Koneksi bermasalah, coba lagi';
+  }
 }
   
 // ----- Tombol Enter (scanner USB otomatis menekan Enter) -----
