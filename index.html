@@ -88,17 +88,6 @@
       <div id="riwayatPenjual" style="margin-top:10px;overflow-x:auto"></div>
     </div>
     <div class="kartu">
-      <div class="besar">Ajukan pencairan dana</div>
-      <div id="infoAjukan">Memuat...</div>
-      <label>Nominal yang diajukan (Rp)</label>
-      <input id="ajNominal" inputmode="numeric" autocomplete="off">
-      <label>Catatan (misal: transfer ke BRI atau tunai)</label>
-      <input id="ajCatatan" autocomplete="off" maxlength="100">
-      <button id="btnAjukan" onclick="ajukanKlik()">Ajukan ke bendahara</button>
-      <div id="pesanAjukan" class="pesan"></div>
-      <div id="daftarAjuan" style="margin-top:10px;font-size:13px;overflow-x:auto"></div>
-    </div>
-    <div class="kartu">
       <div id="rkTeks">Memuat ringkasan...</div>
     </div>
   </div>
@@ -137,11 +126,6 @@
       <div id="pesanKelas" class="pesan"></div>
       <div id="ringkasKelas" style="margin-top:10px;overflow-x:auto"></div>
       <div id="rincianKelas" style="margin-top:10px;overflow-x:auto"></div>
-    </div>
-    <div class="kartu">
-      <div class="besar">Pengajuan pencairan</div>
-      <div id="daftarPengajuan">Memuat...</div>
-      <div id="pesanPengajuan" class="pesan"></div>
     </div>
     
     <div class="kartu">
@@ -240,8 +224,8 @@ function tampilkanHalaman() {
   lihat('kasir', sesi.peran === 'kasir');
   lihat('bendahara', sesi.peran === 'bendahara');
   sembunyi('pesanBend'); sembunyi('pesanCair');
-  if (sesi.peran === 'kasir') { kasirReset(); muatRingkasKasir(); muatAjuan(); muatBarang(); }
-  else { bendaharaReset(); muatPenjual(); muatPengajuan(); muatKelas(); }
+  if (sesi.peran === 'kasir') { kasirReset(); muatRingkasKasir(); muatBarang(); }
+  else { bendaharaReset(); muatPenjual(); muatKelas(); }
 }
 
 // ----- KAMERA (langsung scan) -----
@@ -363,8 +347,6 @@ async function muatRingkasKasir() {
     if (!r.ok) { $('rkTeks').textContent = r.pesan; return; }
     $('rkTeks').textContent = 'Hari ini: ' + r.jumlah_hari_ini + ' transaksi, ' +
       rupiah(r.hari_ini) + ' | Belum dicairkan: ' + rupiah(r.belum_cair);
-    $('infoAjukan').textContent = 'Dana belum dicairkan: ' + rupiah(r.belum_cair);
-    if (!$('ajNominal').value && r.belum_cair > 0) $('ajNominal').value = r.belum_cair;
   } catch (e) {
     $('rkTeks').textContent = 'Ringkasan tidak tersedia';
   }
@@ -586,7 +568,6 @@ async function muatRiwayatPenjual() {
     const r = await panggil('apiRiwayatPenjual', token);
     if (sesiHabis(r)) return;
     if (!r.ok) { kotak.textContent = r.pesan; return; }
-    tampilAjuan(r.pengajuan);
     if (r.transaksi.length === 0) { kotak.textContent = 'Belum ada transaksi.'; return; }
     kotak.innerHTML = '';
     kotak.appendChild(tabelDari(['Waktu', 'Jenis', 'Santri', 'Barang', 'Nominal'],
