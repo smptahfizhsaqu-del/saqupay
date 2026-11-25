@@ -222,7 +222,7 @@ async function masukKlik() {
   }
 }
 function tampilkanHalaman() {
-  if (sesi.peran !== 'kasir' && sesi.peran !== 'bendahara') {
+  if (sesi.peran !== 'kasir' && sesi.peran !== 'bendahara' && sesi.peran !== 'penjual') {
     const p = sesi.peran, t = token;
     keluarLokal('Peran ' + p + ' belum memiliki halaman');
     panggil('keluar', t).catch(function () {});
@@ -231,11 +231,18 @@ function tampilkanHalaman() {
   lihat('login', false); lihat('bar', true);
   $('info').textContent = sesi.username + ' (' + sesi.peran +
     (sesi.id_penjual ? ' - ' + sesi.id_penjual : '') + ')';
-  lihat('kasir', sesi.peran === 'kasir');
+  lihat('kasir', sesi.peran === 'kasir' || sesi.peran === 'penjual');
   lihat('bendahara', sesi.peran === 'bendahara');
   sembunyi('pesanBend'); sembunyi('pesanCair');
-  if (sesi.peran === 'kasir') { kasirReset(); muatRingkasKasir(); muatBarang(); }
-  else { bendaharaReset(); muatPenjual(); muatKelas(); }
+  if (sesi.peran === 'kasir') {
+    kasirReset(); muatRingkasKasir(); muatBarang();
+  } else if (sesi.peran === 'penjual') {
+    lihat('k1', false); lihat('k2', false); lihat('k3', false);
+    sembunyi('pesanKasir');
+    muatRingkasKasir(); muatBarang();
+  } else {
+    bendaharaReset(); muatPenjual(); muatKelas();
+  }
 }
 
 // ----- KAMERA (langsung scan) -----
