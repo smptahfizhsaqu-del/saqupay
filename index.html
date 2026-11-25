@@ -83,6 +83,16 @@
     </div>
     <div id="pesanKasir" class="pesan"></div>
     <div class="kartu">
+      <div class="besar">Menu jualan saya</div>
+      <div id="daftarMenu" style="margin-bottom:8px">Memuat...</div>
+      <label id="emJudul">Tambah menu baru</label>
+      <input id="emNama" autocomplete="off" maxlength="50" placeholder="Nama menu">
+      <input id="emHarga" inputmode="numeric" autocomplete="off" placeholder="Harga (Rp)" style="margin-top:6px">
+      <button id="btnMenu" onclick="simpanMenu()">Tambah menu</button>
+      <button id="btnBatalMenu" class="abu hide" onclick="batalEditMenu()">Batal ubah</button>
+      <div id="pesanMenu" class="pesan"></div>
+    </div>
+    <div class="kartu">
       <div class="besar">Penjualan saya</div>
       <button class="abu" onclick="muatRiwayatPenjual()">Lihat riwayat penjualan</button>
       <div id="riwayatPenjual" style="margin-top:10px;overflow-x:auto"></div>
@@ -658,6 +668,7 @@ async function muatBarang() {
   try {
     const r = await panggil('apiDaftarBarang', token);
     if (sesiHabis(r)) return;
+    tampilMenu(r.ok ? r.daftar : []);
     const kotak = $('daftarBarang');
     kotak.innerHTML = '';
     if (!r.ok || r.daftar.length === 0) { lihat('pilihCepat', false); return; }
@@ -794,6 +805,101 @@ async function bukaRincian(idKartu, nama) {
     kotak.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     kotak.textContent = 'Koneksi bermasalah, coba lagi';
+  }
+}
+
+// ----- ETALASE: PENJUAL MENGELOLA MENU SENDIRI -----
+let menuLama = null; // nama menu yang sedang diubah (null = mode tambah)
+
+function tampilMenu(daftar) {
+  const kotak = $('daftarMenu');
+  kotak.innerHTML = '';
+  if (!daftar || daftar.length === 0) {
+    kotak.textContent = 'Belum ada menu. Tambahkan di bawah.';
+    return;
+  }
+  daftar.forEach(function (x) {
+    const baris = document.createElement('div');
+    baris.style.cssText = 'display:flex;align-items:center;gap:6px;border-bottom:1px solid #e2e8e4;padding:6px 0';
+    const teks = document.createElement('div');
+    teks.style.cssText = 'flex:1';
+    teks.textContent = x.nama + ' (' + rupiah(x.harga) + ')';
+    const ubah = document.createElement('button');
+    ubah.textContent = 'Ubah';
+    ubah.className = 'abu';
+    ubah.style.cssText = 'width:auto;margin:0;padding:6px 10px;font-size:13px';
+    ubah.onclick = function () { mulaiUbahMenu(x.nama, x.harga); };
+    const hapus = document.createElement('button');
+    hapus.textContent = 'Hapus';
+    hapus.style.cssText = 'width:auto;margin:0;padding:6px 10px;font-size:13px;background:#a33a2d';
+    hapus.onclick = function () { hapusMenu(x.nama); };
+    baris.appendChild(teks);
+    baris.appendChild(ubah);
+    baris.appendChild(hapus);
+    kotak.appendChild(baris);
+  });
+}
+
+function mulaiUbahMenu(nama, harga) {
+  menuLama = nama;
+  $('emNama').value = nama;
+  $('emHarga').value = harga;
+  $('emJudul').textContent = 'Ubah menu: ' + nama;
+  $('btnMenu').textContent = 'Simpan perubahan';
+  lihat('btnBatalMenu', true);
+  sembunyi('pesanMenu');
+  $('emNama').focus();
+}
+
+function batalEditMenu() {
+  menuLama = null;
+  $('emNama').value = '';
+  $('emHarga').value = '';
+  $('emJudul').textContent = 'Tambah menu baru';
+  $('btnMenu').textContent = 'Tambah menu';
+  lihat('btnBatalMenu', false);
+}
+
+async function simpanMenu() {
+  const nama = $('emNama').value.trim();
+  const harga = angka($('emHarga').value);
+  if (!nama) { tampil('pesanMenu', 'Isi nama menu', 'err'); return; }
+  if (harga <= 0) { tampil('pesanMenu', 'Isi harga menu', 'err'); return; }
+  $('btnMenu').disabled = true;
+  try {
+    const r = menuLama === null
+      ? await panggil('apiTambahMenu', token, nama, harga)
+      : await panggil('apiUbahMenu', token, menuLama, nama, harga);
+    if (sesiHabis(r)) return;
+    if (r.ok) {
+      const diubah = menuLama !== null;
+      batalEditMenu();
+      tampil('pesanMenu', diubah ? '✔ Menu diperbarui' : '✔ Menu ditambahkan', 'ok');
+      muatBarang();
+    } else {
+      tampil('pesanMenu', r.pesan, 'err');
+    }
+  } catch (e) {
+    tampil('pesanMenu', 'Koneksi bermasalah, coba lagi', 'err');
+  } finally {
+    $('btnMenu').disabled = false;
+  }
+}
+
+async function hapusMenu(nama) {
+  if (!confirm('Hapus menu "' + nama + '" secara permanen?')) return;
+  try {
+    const r = await panggil('apiHapusMenu', token, nama);
+    if (sesiHabis(r)) return;
+    if (r.ok) {
+      if (menuLama === nama) batalEditMenu();
+      tampil('pesanMenu', '✔ Menu dihapus', 'ok');
+      muatBarang();
+    } else {
+      tampil('pesanMenu', r.pesan, 'err');
+    }
+  } catch (e) {
+    tampil('pesanMenu', 'Koneksi bermasalah, coba lagi', 'err');
   }
 }
   
