@@ -51,6 +51,48 @@
     <button class="abu" onclick="tutupKamera()">Tutup kamera</button>
   </div>
 
+  <!-- KERANJANG KASIR BERSAMA -->
+  <div id="keranjang" class="hide">
+    <div id="kr1">
+      <div class="kartu">
+        <div class="besar">Pilih barang</div>
+        <label>Penjual</label>
+        <select id="krPenjual" onchange="krGantiPenjual()"></select>
+        <div id="krMenu" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+        <label>Atau ketik barang di luar menu</label>
+        <input id="krNamaManual" autocomplete="off" maxlength="50" placeholder="Nama barang">
+        <input id="krHargaManual" inputmode="numeric" autocomplete="off" placeholder="Harga (Rp)" style="margin-top:6px">
+        <button class="abu" onclick="krTambahManual()">Tambah ke keranjang</button>
+      </div>
+      <div class="kartu">
+        <div class="besar">Keranjang</div>
+        <div id="krIsi">Keranjang kosong</div>
+        <div id="krTotal" class="besar" style="margin-top:8px"></div>
+        <button class="abu" onclick="krKosongkan()">Kosongkan keranjang</button>
+      </div>
+      <div class="kartu">
+        <label>Kartu santri</label>
+        <input id="krKartu" autocomplete="off" autocapitalize="characters" placeholder="Scan atau ketik kode kartu">
+        <button class="abu" onclick="bukaKamera('krKartu', krCekKartu)">📷 Scan dengan kamera</button>
+        <button onclick="krCekKartu()">Lanjut</button>
+      </div>
+    </div>
+    <div id="kr2" class="kartu hide">
+      <div class="besar" id="krNama"></div>
+      <div id="krRincian"></div>
+      <label>Masukkan PIN</label>
+      <input id="krPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+      <button id="btnKrBayar" onclick="krBayar()">Bayar</button>
+      <button class="abu" onclick="krKembali()">Batal</button>
+    </div>
+    <div id="kr3" class="kartu hide">
+      <div class="besar" id="krHasil"></div>
+      <div id="krDetail"></div>
+      <button onclick="krTransaksiBaru()">Transaksi baru</button>
+    </div>
+    <div id="pesanKr" class="pesan"></div>
+  </div>
+  
   <!-- KASIR -->
   <div id="kasir" class="hide">
     <div id="k1" class="kartu">
@@ -195,6 +237,7 @@ function keluarLokal(pesan) {
   tutupKamera();
   clearTimeout(timerReset);
   lihat('kasir', false); lihat('bendahara', false); lihat('bar', false); lihat('login', true);
+  lihat('keranjang', false); krItems = []; krKartuAktif = null;
   if (pesan) tampil('pesanLogin', pesan, 'err'); else sembunyi('pesanLogin');
   $('user').focus();
 }
@@ -231,11 +274,12 @@ function tampilkanHalaman() {
   lihat('login', false); lihat('bar', true);
   $('info').textContent = sesi.username + ' (' + sesi.peran +
     (sesi.id_penjual ? ' - ' + sesi.id_penjual : '') + ')';
-  lihat('kasir', sesi.peran === 'kasir' || sesi.peran === 'penjual');
+  lihat('keranjang', sesi.peran === 'kasir');
+  lihat('kasir', sesi.peran === 'penjual');
   lihat('bendahara', sesi.peran === 'bendahara');
   sembunyi('pesanBend'); sembunyi('pesanCair');
   if (sesi.peran === 'kasir') {
-    kasirReset(); muatRingkasKasir(); muatBarang();
+    krTransaksiBaru(); krMuat();
   } else if (sesi.peran === 'penjual') {
     lihat('k1', false); lihat('k2', false); lihat('k3', false);
     sembunyi('pesanKasir');
@@ -909,6 +953,198 @@ async function hapusMenu(nama) {
     tampil('pesanMenu', 'Koneksi bermasalah, coba lagi', 'err');
   }
 }
+
+// ----- KASIR BERSAMA: KERANJANG BEBERAPA PENJUAL -----
+let krPenjual = [], krMenu = {}, krItems = [], krKartuAktif = null, krTimer = null;
+
+function krNamaPenjual(id) {
+  const p = krPenjual.filter(function (x) { return x.id === id; })[0];
+  return p ? p.nama : id;
+}
+
+async function krMuat() {
+  try {
+    const r = await panggil('apiDaftarMenuSemua', token);
+    if (sesiHabis(r)) return;
+    if (!r.ok) { tampil('pesanKr', r.pesan, 'err'); return; }
+    krPenjual = r.penjual;
+    krMenu = r.menu;
+    const pilih = $('krPenjual');
+    const terpilih = pilih.value;
+    pilih.innerHTML = '';
+    krPenjual.forEach(function (p) {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.nama;
+      pilih.appendChild(o);
+    });
+    if (terpilih) pilih.value = terpilih;
+    krGantiPenjual();
+  } catch (e) {
+    tampil('pesanKr', 'Gagal memuat daftar menu', 'err');
+  }
+}
+
+function krGantiPenjual() {
+  const id = $('krPenjual').value;
+  const daftar = krMenu[id] || [];
+  const kotak = $('krMenu');
+  kotak.innerHTML = '';
+  if (daftar.length === 0) {
+    kotak.textContent = 'Penjual ini belum punya menu. Ketik barang di bawah.';
+    return;
+  }
+  daftar.forEach(function (x) {
+    const b = document.createElement('button');
+    b.textContent = x.nama + ' (' + rupiah(x.harga) + ')';
+    b.style.cssText = 'flex:1 1 45%;width:auto;margin:0;padding:10px;font-size:15px;';
+    b.onclick = function () { krTambah(id, x.nama, x.harga); };
+    kotak.appendChild(b);
+  });
+}
+
+function krTambah(id, nama, harga) {
+  if (krItems.length >= 30) {
+    tampil('pesanKr', 'Keranjang penuh (maksimal 30 barang)', 'err');
+    return;
+  }
+  krItems.push({ id_penjual: id, nama: nama, harga: harga });
+  sembunyi('pesanKr');
+  krTampil();
+}
+
+function krTambahManual() {
+  const id = $('krPenjual').value;
+  const nama = $('krNamaManual').value.trim();
+  const harga = angka($('krHargaManual').value);
+  if (!id) { tampil('pesanKr', 'Pilih penjual dulu', 'err'); return; }
+  if (!nama) { tampil('pesanKr', 'Isi nama barang', 'err'); return; }
+  if (harga <= 0) { tampil('pesanKr', 'Isi harga barang', 'err'); return; }
+  krTambah(id, nama, harga);
+  $('krNamaManual').value = '';
+  $('krHargaManual').value = '';
+}
+
+function krTampil() {
+  const kotak = $('krIsi');
+  kotak.innerHTML = '';
+  if (krItems.length === 0) {
+    kotak.textContent = 'Keranjang kosong';
+    $('krTotal').textContent = '';
+    return;
+  }
+  let total = 0;
+  krItems.forEach(function (x, i) {
+    total += x.harga;
+    const baris = document.createElement('div');
+    baris.style.cssText = 'display:flex;align-items:center;gap:6px;border-bottom:1px solid #e2e8e4;padding:6px 0';
+    const teks = document.createElement('div');
+    teks.style.cssText = 'flex:1';
+    teks.textContent = krNamaPenjual(x.id_penjual) + ': ' + x.nama + ' (' + rupiah(x.harga) + ')';
+    const hapus = document.createElement('button');
+    hapus.textContent = 'Hapus';
+    hapus.style.cssText = 'width:auto;margin:0;padding:6px 10px;font-size:13px;background:#a33a2d';
+    hapus.onclick = function () { krItems.splice(i, 1); krTampil(); };
+    baris.appendChild(teks);
+    baris.appendChild(hapus);
+    kotak.appendChild(baris);
+  });
+  $('krTotal').textContent = 'Total: ' + rupiah(total);
+}
+
+function krKosongkan() {
+  krItems = [];
+  krTampil();
+}
+
+async function krCekKartu() {
+  const id = $('krKartu').value.trim();
+  if (krItems.length === 0) { tampil('pesanKr', 'Keranjang masih kosong', 'err'); return; }
+  if (!id) { tampil('pesanKr', 'Scan kartu dulu', 'err'); $('krKartu').focus(); return; }
+  try {
+    const r = await panggil('apiCekSantri', token, id);
+    if (sesiHabis(r)) return;
+    if (!r.ok) { $('krKartu').value = ''; tampil('pesanKr', r.pesan, 'err'); return; }
+    krKartuAktif = { id: r.id_kartu };
+    sembunyi('pesanKr');
+    $('krNama').textContent = r.nama + ' (kelas ' + r.kelas + ')';
+    const per = {}, urut = [];
+    krItems.forEach(function (x) {
+      if (!per[x.id_penjual]) { per[x.id_penjual] = { subtotal: 0, nama: [] }; urut.push(x.id_penjual); }
+      per[x.id_penjual].subtotal += x.harga;
+      per[x.id_penjual].nama.push(x.nama);
+    });
+    const kotak = $('krRincian');
+    kotak.innerHTML = '';
+    let total = 0;
+    urut.forEach(function (idP) {
+      total += per[idP].subtotal;
+      const d = document.createElement('div');
+      d.textContent = krNamaPenjual(idP) + ': ' + per[idP].nama.join(', ') + ' = ' + rupiah(per[idP].subtotal);
+      kotak.appendChild(d);
+    });
+    const t = document.createElement('div');
+    t.className = 'besar';
+    t.style.marginTop = '6px';
+    t.textContent = 'Total bayar: ' + rupiah(total);
+    kotak.appendChild(t);
+    lihat('kr1', false); lihat('kr2', true);
+    $('krPin').focus();
+  } catch (e) {
+    tampil('pesanKr', 'Koneksi bermasalah, coba lagi', 'err');
+  }
+}
+
+async function krBayar() {
+  if (!krKartuAktif || krItems.length === 0) return;
+  const pin = $('krPin').value;
+  if (!/^\d{6,8}$/.test(pin)) {
+    tampil('pesanKr', 'PIN harus 6 sampai 8 angka', 'err');
+    $('krPin').focus();
+    return;
+  }
+  $('btnKrBayar').disabled = true;
+  try {
+    const r = await panggil('apiBayarKeranjang', token, krKartuAktif.id, pin, krItems);
+    $('krPin').value = '';
+    if (sesiHabis(r)) return;
+    if (r.ok) {
+      lihat('kr2', false); lihat('kr3', true);
+      sembunyi('pesanKr');
+      $('krHasil').textContent = '✔ Pembayaran berhasil';
+      $('krDetail').textContent = r.nama + ' | Dibayar ' + rupiah(r.total) +
+        ' | Sisa saldo ' + rupiah(r.saldo_sesudah);
+      krItems = [];
+      krTampil();
+      krTimer = setTimeout(krTransaksiBaru, 10000);
+    } else if (r.pesan.indexOf('PIN salah') === 0 && r.pesan.indexOf('dikunci') === -1) {
+      tampil('pesanKr', r.pesan, 'err');
+      $('krPin').focus();
+    } else {
+      krKembali();
+      tampil('pesanKr', r.pesan, 'err');
+    }
+  } catch (e) {
+    tampil('pesanKr', 'Koneksi bermasalah. Cek dulu riwayat transaksi sebelum mengulang.', 'err');
+  } finally {
+    $('btnKrBayar').disabled = false;
+  }
+}
+
+function krKembali() {
+  krKartuAktif = null;
+  $('krKartu').value = '';
+  $('krPin').value = '';
+  lihat('kr1', true); lihat('kr2', false); lihat('kr3', false);
+}
+
+function krTransaksiBaru() {
+  clearTimeout(krTimer);
+  krItems = [];
+  krTampil();
+  krKembali();
+  sembunyi('pesanKr');
+}
   
 // ----- Tombol Enter (scanner USB otomatis menekan Enter) -----
 function enter(id, fn) {
@@ -925,6 +1161,10 @@ enter('pin', bayarKlik);
 enter('bId', bCek);
 enter('bNominal', function () { $('bCatatan').focus(); });
 enter('bCatatan', bSimpan);
+enter('krKartu', krCekKartu);
+enter('krPin', krBayar);
+enter('krNamaManual', function () { $('krHargaManual').focus(); });
+enter('krHargaManual', krTambahManual);
 window.onload = function () {
   if (!pulihkanSesi()) $('user').focus();
 };
